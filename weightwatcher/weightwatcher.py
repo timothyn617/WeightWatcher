@@ -212,10 +212,16 @@ class WeightWatcher:
                     #    weights = weigths[0]+weights[1]
 
             # CONV1D layer
-            elif (isinstance(l, keras.layers.convolutional.Conv1D)):
+            elif (isinstance(l, keras.layers.convolutional.Conv1D)) or isinstance(l, nn.Conv1d):
 
                 res[i] = {"layer_type": LAYER_TYPE.CONV1D}
 
+                if isinstance(l, nn.Conv1d):
+                    w = np.array(l.weight.data.clone().cpu())
+                else:
+                    w = l.get_weights()[0] # keep only the weights and not the bias
+
+                weights = self.get_conv_Wmats(w)
 
             # CONV2D layer
             elif isinstance(l, keras.layers.convolutional.Conv2D) or isinstance(l, nn.Conv2d):
@@ -223,11 +229,11 @@ class WeightWatcher:
                 res[i] = {"layer_type": LAYER_TYPE.CONV2D}
                 
                 if isinstance(l, nn.Conv2d):
-                    w = [np.array(l.weight.data.clone().cpu())]
+                    w = np.array(l.weight.data.clone().cpu())
                 else:
-                    w = l.get_weights()
+                    w = l.get_weights()[0] # keep only the weights and not the bias
                     
-                weights = self.get_conv2D_Wmats(w[0])
+                weights = self.get_conv_Wmats(w)
 
             else:
                 msg = "Skipping (Layer not supported)"
@@ -416,35 +422,15 @@ class WeightWatcher:
             return self.summary
 
 
-    def get_conv2D_Wmats(self, Wtensor):
-        """Extract W slices from a 4 index conv2D tensor of shape: (N,M,i,j) or (M,N,i,j).  
-        Return ij (N x M) matrices
-        
+    def get_conv_Wmats(self, Wtensor):
         """
-        Wmats = []
-        s = Wtensor.shape
-        N, M, imax, jmax = s[0],s[1],s[2],s[3]
-        if N + M >= imax + jmax:
-            self.debug("Pytorch tensor shape detected: {}x{} (NxM), {}x{} (i,j)".format(N, M, imax, jmax))
-            
-            for i in range(imax):
-                for j in range(jmax):
-                    W = Wtensor[:,:,i,j]
-                    if N < M:
-                        W = W.T
-                    Wmats.append(W)
-        else:
-            N, M, imax, jmax = imax, jmax, N, M          
-            self.debug("Keras tensor shape detected: {}x{} (NxM), {}x{} (i,j)".format(N, M, imax, jmax))
-            
-            for i in range(imax):
-                for j in range(jmax):
-                    W = Wtensor[i,j,:,:]
-                    if N < M:
-                        W = W.T
-                    Wmats.append(W)
-            
-        return Wmats
+            Conv weights are of the following shape:
+             1d: (n_out, n_in, filter_size)
+             2d: (n_out, n_in, filter_size, filter_size)
+            We can regard this as a fully connected matrix by rolling the filter_size dimensions into the in dimension.
+        """
+        assert Wtensor.ndim in [3,4], 'Wtensor has the wrong shape: {}'.format(Wtensor.shape)
+        return [Wtensor.reshape(Wtensor.shape[0],-1)]
 
     
     def analyze_weights(self, ilayer, weights, min_size=50, max_size=0,
