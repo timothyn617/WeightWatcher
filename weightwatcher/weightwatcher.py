@@ -157,7 +157,6 @@ class WeightWatcher:
         if not isinstance(layers, list):
             layers = [layers]
         layer_ids = [x for x in layers if str(x).isdigit()]
-        layer_types = [x for x in layers if isinstance(x, LAYER_TYPE)]
 
         if not self.model_is_valid(model):
             self.error("Invalid model")
@@ -201,14 +200,6 @@ class WeightWatcher:
             if isinstance(l, keras.layers.core.Dense) or isinstance(l, nn.Linear):
 
                 res[i]["layer_type"] = LAYER_TYPE.DENSE
-
-                # Filter out layers by type (if any provided)
-                if (len(layer_types) > 0 and
-                        not any(layer_type & LAYER_TYPE.DENSE for layer_type in layer_types)):
-                    msg = "Skipping (Layer type not requested to analyze)"
-                    self.debug("Layer {}: {}".format(ilayer, msg))
-                    res[i]["message"] = msg
-                    continue
                 
                 if isinstance(l, nn.Linear):
                     # pyTorch
@@ -225,26 +216,11 @@ class WeightWatcher:
 
                 res[i] = {"layer_type": LAYER_TYPE.CONV1D}
 
-                if (len(layer_types) > 0 and
-                        not any(layer_type & LAYER_TYPE.CONV1D for layer_type in layer_types)):
-                    msg = "Skipping (Layer type not requested to analyze)"
-                    self.debug("Layer {}: {}".format(ilayer, msg))
-                    res[i]["message"] = msg
-                    continue
-                
-                weights = l.get_weights()[0:1] # keep only the weights and not the bias
 
             # CONV2D layer
             elif isinstance(l, keras.layers.convolutional.Conv2D) or isinstance(l, nn.Conv2d):
 
                 res[i] = {"layer_type": LAYER_TYPE.CONV2D}
-
-                if (len(layer_types) > 0 and
-                        not any(layer_type & LAYER_TYPE.CONV2D for layer_type in layer_types)):
-                    msg = "Skipping (Layer type not requested to analyze)"
-                    self.debug("Layer {}: {}".format(ilayer, msg))
-                    res[i]["message"] = msg
-                    continue
                 
                 if isinstance(l, nn.Conv2d):
                     w = [np.array(l.weight.data.clone().cpu())]
